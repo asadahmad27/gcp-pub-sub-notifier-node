@@ -234,6 +234,7 @@ async function authorize() {
     keyfilePath: CREDENTIALS_PATH,
   });
   if (client.credentials) {
+    await saveCredentials(client);
   }
   return client;
 }
@@ -256,7 +257,7 @@ async function connectPubSub(auth) {
   const res = await gmail.users.watch({
     userId: "me",
     requestBody: {
-      labelIds: ["INBOX"],
+      labelIds: ["INBOX", "UNREAD"],
       topicName: TOPIC_NAME,
     },
   });
@@ -418,7 +419,17 @@ app.post("/webhook", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
   (async () => {
+    //Un comment this line to login if you are ruuning this first time
+    authorize();
+
     let cred = await loadSavedCredentialsIfExist();
     await connectPubSub(cred);
   })();
 });
+
+// authorize()
+//   .then(async () => {
+//     let cred = await loadSavedCredentialsIfExist();
+
+//   })
+//   .catch(console.error);
