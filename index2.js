@@ -1,3 +1,160 @@
+// const fs = require("fs").promises;
+// const path = require("path");
+// const process = require("process");
+// const { authenticate } = require("@google-cloud/local-auth");
+// const { google } = require("googleapis");
+
+// // If modifying these scopes, delete token.json.
+// const SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"];
+// // The file token.json stores the user's access and refresh tokens, and is
+// // created automatically when the authorization flow completes for the first
+// // time.
+// const TOKEN_PATH = path.join(process.cwd(), "token.json");
+// const CREDENTIALS_PATH = path.join(process.cwd(), "credentials.json");
+// const TOPIC_NAME = "projects/gcp-pub-sub-notifier/topics/gmail-notifiier";
+
+// /**
+//  * Reads previously authorized credentials from the save file.
+//  *
+//  * @return {Promise<OAuth2Client|null>}
+//  */
+// async function loadSavedCredentialsIfExist() {
+//   try {
+//     const content = await fs.readFile(TOKEN_PATH);
+//     const credentials = JSON.parse(content);
+//     return google.auth.fromJSON(credentials);
+//   } catch (err) {
+//     return null;
+//   }
+// }
+
+// /**
+//  * Serializes credentials to a file comptible with GoogleAUth.fromJSON.
+//  *
+//  * @param {OAuth2Client} client
+//  * @return {Promise<void>}
+//  */
+// async function saveCredentials(client) {
+//   const content = await fs.readFile(CREDENTIALS_PATH);
+//   const keys = JSON.parse(content);
+//   const key = keys.installed || keys.web;
+//   const payload = JSON.stringify({
+//     type: "authorized_user",
+//     client_id: key.client_id,
+//     client_secret: key.client_secret,
+//     refresh_token: client.credentials.refresh_token,
+//   });
+//   await fs.writeFile(TOKEN_PATH, payload);
+// }
+
+// /**
+//  * Load or request or authorization to call APIs.
+//  *
+//  */
+// async function authorize() {
+//   let client = await loadSavedCredentialsIfExist();
+//   if (client) {
+//     return client;
+//   }
+//   client = await authenticate({
+//     scopes: SCOPES,
+//     keyfilePath: CREDENTIALS_PATH,
+//   });
+//   if (client.credentials) {
+//     await saveCredentials(client);
+//   }
+//   return client;
+// }
+
+// /**
+//  * Lists the labels in the user's account.
+//  *
+//  * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
+//  */
+// async function listLabels(auth) {
+//   const gmail = google.gmail({ version: "v1", auth });
+//   const res = await gmail.users.labels.list({
+//     userId: "me",
+//   });
+//   const labels = res.data.labels;
+//   if (!labels || labels.length === 0) {
+//     console.log("No labels found.");
+//     return;
+//   }
+//   console.log("Labels:");
+//   labels.forEach((label) => {
+//     console.log(`- ${label.name}`);
+//   });
+// }
+
+// // Function to log the data object to the console
+// function logCompleteJsonObject(jsonObject) {
+//   console.log(JSON.stringify(jsonObject, null, 4), "+======");
+// }
+// // Get history details based on history ID
+// async function getHistory(auth, historyId) {
+//   const gmail = google.gmail({ version: "v1", auth });
+//   const res = await gmail.users.history.list({
+//     userId: "me",
+//     startHistoryId: historyId,
+//   });
+//   // The main part of the response comes
+//   // in the "data" attribute.
+//   logCompleteJsonObject(res.data);
+// }
+
+// // Connect to Pub Sub
+// async function connectPubSub(auth) {
+//   const gmail = google.gmail({ version: "v1", auth });
+//   const res = await gmail.users.watch({
+//     userId: "me",
+//     requestBody: {
+//       labelIds: ["INBOX"],
+//       topicName: TOPIC_NAME,
+//     },
+//   });
+//   console.log(res);
+// }
+
+// async function getMessage(auth, messageId) {
+//   const gmail = google.gmail({ version: "v1", auth });
+//   const res = await gmail.users.messages.get({
+//     userId: "me",
+//     id: messageId,
+//   });
+//   logCompleteJsonObject(res.data);
+// }
+
+// // Run the script
+// // (async () => {
+// //   let cred = await loadSavedCredentialsIfExist();
+// //   await connectPubSub(cred);
+// // })();
+
+// // authorize()
+// //   .then(async () => {
+// //     let cred = await loadSavedCredentialsIfExist();
+// //     await connectPubSub(cred);
+// //     let historyId = 48063;
+// //     await getHistory(cred, historyId);
+// //   })
+// //   .catch(console.error);
+
+// // // (async () => {
+// // //   let cred = await loadSavedCredentialsIfExist();
+// // //   let historyId = 48058;
+// // //   await getHistory(cred, historyId);
+// // // })();
+
+// // Run the script
+// (async () => {
+//   let cred = await loadSavedCredentialsIfExist();
+//   //   let historyId = 47406;
+//   //   await getHistory(cred, historyId);
+//   let messageId = "1904e6d789999ea6";
+//   await getMessage(cred, messageId);
+// })();
+
 const express = require("express");
 const bodyParser = require("body-parser");
 const fs = require("fs").promises;
@@ -6,7 +163,6 @@ const process = require("process");
 const { authenticate } = require("@google-cloud/local-auth");
 const { google } = require("googleapis");
 const admin = require("firebase-admin");
-const cors = require("cors"); // Import CORS
 // const serviceAccount = require("./firebase-private-keys.json");
 const serviceAccount = {
   type: "service_account",
@@ -32,14 +188,7 @@ admin.initializeApp({
 });
 
 const app = express();
-const PORT = process.env.PORT || 5000;
-
-// Configure CORS
-const corsOptions = {
-  origin: "*", // Replace with your frontend URL
-  optionsSuccessStatus: 200,
-};
-app.use(cors(corsOptions));
+const PORT = process.env.PORT || 3000;
 
 // Use body-parser to parse JSON bodies into JS objects
 app.use(bodyParser.json());
@@ -85,6 +234,7 @@ async function authorize() {
     keyfilePath: CREDENTIALS_PATH,
   });
   if (client.credentials) {
+    saveCredentials(client);
   }
   return client;
 }
@@ -115,7 +265,7 @@ async function connectPubSub(auth) {
 }
 
 const sanitizeKey = (key) => {
-  return key.replace(/[.#$/\[\]]/g, "_");
+  return key?.replace(/[.#$/\[\]]/g, "_");
 };
 
 const getHistoryId = async () => {
@@ -129,7 +279,7 @@ const setHistoryId = async (historyId) => {
   await ref.set(historyId);
 };
 
-async function getMessage(auth, messageId) {
+async function getMessage(auth, messageId, userEmail) {
   const gmail = google.gmail({ version: "v1", auth });
   const res = await gmail.users.messages.get({
     userId: "me",
@@ -167,12 +317,13 @@ async function getMessage(auth, messageId) {
     //   emailData[part.mimeType] = decodedBody;
     // }
   });
-  console.log(emailData, "emailsData");
+  console.log(emailData, "emailsData", userEmail);
 
   try {
     // Store the email data in Firebase using messageId as the key
-    const ref = db.ref("emails/").child(messageId);
 
+    // Store the email data in Firebase under the user's email
+    const ref = db.ref(`emails/${sanitizeKey(userEmail)}`).child(messageId);
     ref.set(emailData, (error) => {
       if (error) {
         console.log("Data could not be saved.", error);
@@ -180,6 +331,16 @@ async function getMessage(auth, messageId) {
         console.log("Data saved successfully.");
       }
     });
+
+    // const ref = db.ref("emails").child(messageId);
+
+    // ref.set(emailData, (error) => {
+    //   if (error) {
+    //     console.log("Data could not be saved.", error);
+    //   } else {
+    //     console.log("Data saved successfully.");
+    //   }
+    // });
   } catch (e) {
     console.log("error in firebase", e);
   }
@@ -187,33 +348,21 @@ async function getMessage(auth, messageId) {
   console.log("+======");
 }
 
-// Function to list unread messages for a user
-async function listUnreadMessages(auth, historyId, userId) {
+async function listMessages(auth, lastHistoryId, userEmail) {
   const gmail = google.gmail({ version: "v1", auth });
-  const res = await gmail.users.history.list({
+  const res = await gmail.users.messages.list({
     userId: "me",
-    startHistoryId: historyId,
-    historyTypes: ["messageAdded"],
+    labelIds: ["INBOX", "UNREAD"],
+    maxResults: 10, // Adjust this number to fetch more emails if needed
   });
+  const messages = res.data.messages;
 
-  const histories = res.data.history;
-  const messages = [];
-
-  if (histories && histories.length > 0) {
-    for (const history of histories) {
-      if (history.messagesAdded) {
-        for (const message of history.messagesAdded) {
-          const messageDetails = await getMessage(auth, message.message.id);
-          messages.push(messageDetails);
-        }
-      }
+  if (messages && messages.length > 0) {
+    for (const message of messages) {
+      await getMessage(auth, message.id, userEmail);
     }
   } else {
-    console.log("No new messages found.");
-  }
-
-  if (messages.length > 0) {
-    await storeMessages(messages, userId);
+    console.log("No messages found.");
   }
 }
 
@@ -238,199 +387,37 @@ async function listUnreadMessages(auth, historyId, userId) {
 //       console.log("No new messages found.");
 //     }}
 app.get("/", (req, res) => {
-  res.send("GCP is working fine on server");
+  res.send("GCP2 is working fine on server");
 });
-
-async function createGmailWatch(auth) {
-  try {
-    const gmail = google.gmail({ version: "v1", auth });
-    console.log(gmail, "gmail", auth);
-    const res = await gmail.users.watch({
-      userId: "me",
-      requestBody: {
-        labelIds: ["INBOX"],
-        topicName: TOPIC_NAME,
-      },
-    });
-    console.log(res);
-  } catch (e) {
-    console.log("Error in gmail watch", e);
-  }
-}
-
-const oauth2Client = new google.auth.OAuth2(
-  "226341879966-a1nf9tfijbfkjqrlmqpdephpjd5ilquh.apps.googleusercontent.com",
-  "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",
-  "http://localhost:3001"
-);
-
-const refreshAccessToken = async (refreshToken) => {
-  oauth2Client.setCredentials({ refresh_token: refreshToken });
-  const { credentials } = await oauth2Client.refreshAccessToken();
-  console.log(credentials, "credentials");
-  return credentials;
-};
-
-// Endpoint to receive Google OAuth tokens
-app.post("/store-tokens", async (req, res) => {
-  const { code } = req.body;
-
-  try {
-    // Exchange authorization code for tokens
-    const { tokens } = await oauth2Client.getToken(code);
-    oauth2Client.setCredentials(tokens);
-
-    // Extract the tokens
-    const { access_token, refresh_token, id_token } = tokens;
-    console.log(
-      access_token,
-      "-=-==-=",
-      refresh_token,
-      "--==--=-=-",
-      id_token,
-      "tokens"
-    );
-
-    // Verify the ID token and get user info
-    const ticket = await oauth2Client.verifyIdToken({
-      idToken: id_token,
-      audience:
-        "226341879966-a1nf9tfijbfkjqrlmqpdephpjd5ilquh.apps.googleusercontent.com",
-    });
-
-    const payload = ticket.getPayload();
-    console.log(payload, "payload");
-    const userId = payload["sub"]; // User ID
-    const email = payload["email"]; // User email
-
-    const ref = db.ref(`users/${userId}/tokens`);
-    await ref.set({ tokens, email });
-
-    await createGmailWatch(oauth2Client);
-
-    // Send tokens to the client or store them in your database
-    res.status(200).send({ access_token, refresh_token, id_token });
-  } catch (error) {
-    console.error("Error exchanging authorization code for tokens:", error);
-    res.status(400).send("Error exchanging authorization code for tokens");
-  }
-
-  // const { userId, tokens, email } = req.body;
-  // console.log(userId, "-=-=-=-===-=-", tokens);
-
-  // const updated = {
-  //   ...tokens,
-  //   refresh_token:
-  //     "1//03KTNE9u8Q52uCgYIARAAGAMSNwF-L9Ir6ZCwB-Hbckucc-BETG4cIf0W1r5zV5crtjzEx5ArJVA_ShVGVLv9UJKycqH4JgG-CtY",
-  // };
-
-  // Use the tokens to set up Gmail watch
-  // const oauth2Client = new google.auth.OAuth2();
-  // try {
-  //   const oauth2Client = new google.auth.OAuth2(
-  //     "226341879966-a1nf9tfijbfkjqrlmqpdephpjd5ilquh.apps.googleusercontent.com",
-  //     "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"
-  //   );
-  //   oauth2Client.setCredentials(tokens);
-  // } catch (e) {
-  //   console.log(e, "hre eorror");
-  // }
-  // const oauth2Client = new google.auth.OAuth2(
-  //   "226341879966-a1nf9tfijbfkjqrlmqpdephpjd5ilquh.apps.googleusercontent.com",
-  //   "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"
-  // );
-  // const oauth2Client = new google.auth.OAuth2(
-  //   "226341879966-a1nf9tfijbfkjqrlmqpdephpjd5ilquh.apps.googleusercontent.com",
-  //   "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",
-  //   "http://localhost:8080"
-  // );
-  // Set the initial credentials
-  // ====
-  // oauth2Client.setCredentials(updated);
-
-  // Refresh the access token
-  // const newTokens = await refreshAccessToken(tokens.refresh_token);
-  // await ref.update(newTokens); // Update stored tokens with new access token
-
-  // Set the new credentials
-  // oauth2Client.setCredentials(newTokens);
-
-  // oauth2Client.setCredentials(tokens);
-
-  // await createGmailWatch(oauth2Client);
-
-  // res.status(200).send("Tokens stored successfully");
-});
-
-// app.post("/webhook", async (req, res) => {
-//   try {
-//     const pubSubMessage = req.body.message;
-//     const messageData = Buffer.from(pubSubMessage.data, "base64").toString(
-//       "utf-8"
-//     );
-//     const messageJson = JSON.parse(messageData);
-
-//     const emailAddress = messageJson.emailAddress;
-//     const historyId = messageJson.historyId;
-
-//     console.log(
-//       `Received webhook for email: ${emailAddress}, historyId: ${historyId}`
-//     );
-
-//     // Authorize and fetch the history details
-//     let auth = await authorize();
-
-//     // Get the last stored history ID
-//     const lastHistoryId = (await getHistoryId()) ?? historyId;
-
-//     // Option 1: Log all messages in the inbox
-//     await listMessages(auth, lastHistoryId);
-
-//     // await getHistory(auth, historyId);
-
-//     // Update the history ID in Firebase
-//     await setHistoryId(historyId);
-
-//     res.status(204).send(); // Acknowledge the message
-//   } catch (error) {
-//     console.error("Error handling webhook", error);
-//     res.status(500).send("Error handling webhook");
-//   }
-// });
 
 app.post("/webhook", async (req, res) => {
   try {
-    console.log("Webhook received:", req.body); // Log the incoming request
-
     const pubSubMessage = req.body.message;
     const messageData = Buffer.from(pubSubMessage.data, "base64").toString(
       "utf-8"
     );
     const messageJson = JSON.parse(messageData);
 
-    const userId = messageJson.userId; // Use userId instead of email
+    const emailAddress = messageJson.emailAddress;
     const historyId = messageJson.historyId;
 
     console.log(
-      `Received webhook for userId: ${userId}, historyId: ${historyId}`
+      `Received webhook for email: ${emailAddress}, historyId: ${historyId}`
     );
 
-    // Authorize and fetch the unread messages
-    const userTokensSnapshot = await db
-      .ref(`users/${sanitizeKey(userId)}/tokens`)
-      .once("value");
-    const userTokens = userTokensSnapshot.val();
-    const oauth2Client = new google.auth.OAuth2();
-    oauth2Client.setCredentials(userTokens);
+    // Authorize and fetch the history details
+    let auth = await authorize();
 
     // Get the last stored history ID
-    const lastHistoryId = await getHistoryId(userId);
+    const lastHistoryId = (await getHistoryId()) ?? historyId;
 
-    // Fetch and store new messages since the last history ID
-    await listUnreadMessages(oauth2Client, lastHistoryId, userId);
+    // Option 1: Log all messages in the inbox
+    await listMessages(auth, lastHistoryId, emailAddress);
+
+    // await getHistory(auth, historyId);
 
     // Update the history ID in Firebase
-    await setHistoryId(historyId, userId);
+    await setHistoryId(historyId);
 
     res.status(204).send(); // Acknowledge the message
   } catch (error) {
@@ -442,9 +429,11 @@ app.post("/webhook", async (req, res) => {
 // Start the Express server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
-  // (async () => {
-  //   // authorize
-  //   let cred = await loadSavedCredentialsIfExist();
-  //   await connectPubSub(cred);
-  // })();
+  (async () => {
+    authorize();
+
+    let cred = await loadSavedCredentialsIfExist();
+    console.log(cred, "Cred");
+    await connectPubSub(cred);
+  })();
 });
