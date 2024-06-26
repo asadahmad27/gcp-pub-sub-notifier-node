@@ -93,87 +93,94 @@ function logCompleteJsonObject(jsonObject) {
   console.log(JSON.stringify(jsonObject, null, 4), "+======");
 }
 
-async function getHistory(auth, historyId) {
-  const gmail = google.gmail({ version: "v1", auth });
-  const res = await gmail.users.history.list({
-    userId: "me",
-    startHistoryId: historyId,
-  });
-  logCompleteJsonObject(res.data);
-}
-
-async function connectPubSub(auth) {
-  const gmail = google.gmail({ version: "v1", auth });
-  const res = await gmail.users.watch({
-    userId: "me",
-    requestBody: {
-      labelIds: ["INBOX"],
-      topicName: TOPIC_NAME,
-    },
-  });
-  console.log(res);
-}
-
 const sanitizeKey = (key) => {
   return key.replace(/[.#$/\[\]]/g, "_");
 };
 
-const getHistoryId = async () => {
-  const ref = db.ref("historyId");
-  const snapshot = await ref.once("value");
-  return snapshot.val();
+const getHistoryId = async (userId) => {
+  try {
+    const ref = db.ref(`users/${userId}/historyId`);
+    const snapshot = await ref.once("value");
+    const historyId = snapshot.val();
+
+    return historyId;
+  } catch (error) {
+    console.error("Error retrieving historyId:", error);
+    return null;
+  }
 };
 
-const setHistoryId = async (historyId) => {
-  const ref = db.ref("historyId");
+const setHistoryId = async (historyId, userId) => {
+  const ref = db.ref(`users/${userId}/historyId`);
   await ref.set(historyId);
 };
 
+// Function to list unread messages for a user
 async function getMessage(auth, messageId) {
-  const gmail = google.gmail({ version: "v1", auth });
-  const res = await gmail.users.messages.get({
-    userId: "me",
-    id: messageId,
-  });
+  try {
+    const gmail = google.gmail({ version: "v1", auth });
+    const res = await gmail.users.messages.get({
+      userId: "me",
+      id: messageId,
+    });
 
-  const message = res.data;
-  const headers = message.payload.headers;
-  const emailData = {};
+    const message = res.data;
+    const headers = message.payload.headers;
+    const emailData = {};
 
-  headers.forEach((header) => {
-    emailData[header.name] = header.value;
-  });
+    // List of keys to remove
+    const keysToRemove = [
+      "Received",
+      "Received-SPF",
+      "ARC-Message-Signature",
+      "ARC-Authentication-Results",
+      "ARC-Seal",
+      "X-Received",
+      "X-Gm-Message-State",
+      "X-Google-Smtp-Source",
+      "DKIM-Signature",
+      "X-Google-DKIM-Signature",
+      "Return-Path",
+      "Authentication-Results",
+    ];
 
-  // Function to decode base64url encoding
-  const decodeBase64Url = (encoded) => {
-    encoded = encoded.replace(/-/g, "+").replace(/_/g, "/");
-    let decoded = Buffer.from(encoded, "base64").toString("utf8");
-    return decoded;
-  };
+    headers.forEach((header) => {
+      if (!keysToRemove.includes(header.name)) {
+        emailData[header.name] = header.value;
+      }
+    });
 
-  const parts = message.payload.parts || [];
-  parts.forEach((part) => {
-    const sanitizedMimeType = sanitizeKey(part.mimeType);
-    if (
-      sanitizedMimeType === "text_plain" ||
-      sanitizedMimeType === "text_html"
-    ) {
-      const decodedBody = decodeBase64Url(part.body.data);
-      emailData[sanitizedMimeType] = decodedBody;
-    }
+    // Function to decode base64url encoding
+    const decodeBase64Url = (encoded) => {
+      encoded = encoded.replace(/-/g, "+").replace(/_/g, "/");
+      let decoded = Buffer.from(encoded, "base64").toString("utf8");
+      return decoded;
+    };
 
-    // if (part.mimeType === "text/plain" || part.mimeType === "text/html") {
-    //   const decodedBody = decodeBase64Url(part.body.data);
-    //   emailData[part.mimeType] = decodedBody;
-    // }
-  });
-  console.log(emailData, "emailsData");
+    const parts = message.payload.parts || [];
+    parts.forEach((part) => {
+      const sanitizedMimeType = sanitizeKey(part.mimeType);
+      if (
+        sanitizedMimeType === "text_plain" ||
+        sanitizedMimeType === "text_html"
+      ) {
+        const decodedBody = decodeBase64Url(part.body.data);
+        emailData[sanitizedMimeType] = decodedBody;
+      }
+    });
 
+    return emailData;
+  } catch (e) {
+    console.log("no mesg for", messageId);
+  }
+}
+
+const storeMailsInDB = (mails, userId) => {
   try {
     // Store the email data in Firebase using messageId as the key
-    const ref = db.ref("emails/").child(messageId);
+    const ref = db.ref(`users/${userId}/mails`);
 
-    ref.set(emailData, (error) => {
+    ref.set(mails, (error) => {
       if (error) {
         console.log("Data could not be saved.", error);
       } else {
@@ -183,79 +190,100 @@ async function getMessage(auth, messageId) {
   } catch (e) {
     console.log("error in firebase", e);
   }
+};
 
-  console.log("+======");
+async function fetchInitialMessages(auth, userId) {
+  const gmail = google.gmail({ version: "v1", auth });
+  try {
+    const res = await gmail.users.messages.list({
+      userId: "me",
+      labelIds: ["INBOX", "UNREAD"],
+      maxResults: 50, // Adjust this number as needed
+    });
+
+    const messages = [];
+    for (const message of res.data.messages) {
+      const messageDetails = await getMessage(auth, message.id);
+      messages.push(messageDetails);
+    }
+
+    console.log("Initial messages:", messages);
+    // storeMailsInDB(messages, userId);
+
+    // Fetch the current history ID
+    const profile = await gmail.users.getProfile({ userId: "me" });
+    const initialHistoryId = profile.data.historyId;
+
+    await setHistoryId(initialHistoryId, userId);
+    return initialHistoryId;
+  } catch (error) {
+    console.error("Error fetching initial messages:", error);
+  }
 }
 
-// Function to list unread messages for a user
 async function listUnreadMessages(auth, historyId, userId) {
   const gmail = google.gmail({ version: "v1", auth });
-  const res = await gmail.users.history.list({
-    userId: "me",
-    startHistoryId: historyId,
-    historyTypes: ["messageAdded"],
-  });
+  try {
+    const res = await gmail.users.history.list({
+      userId: "me",
+      // q: "is:unread", // Query for unread messages
+      startHistoryId: historyId,
+      historyTypes: ["messageAdded"],
+    });
 
-  const histories = res.data.history;
-  const messages = [];
+    const histories = res.data.history;
+    const messages = [];
 
-  if (histories && histories.length > 0) {
-    for (const history of histories) {
-      if (history.messagesAdded) {
-        for (const message of history.messagesAdded) {
-          const messageDetails = await getMessage(auth, message.message.id);
-          messages.push(messageDetails);
+    if (histories && histories.length > 0) {
+      for (const history of histories) {
+        if (history.messagesAdded) {
+          for (const message of history.messagesAdded) {
+            const messageDetails = await getMessage(auth, message.message.id);
+            messages.push(messageDetails);
+          }
         }
       }
+    } else {
+      console.log("No new messages found.");
     }
-  } else {
-    console.log("No new messages found.");
-  }
 
-  if (messages.length > 0) {
-    await storeMessages(messages, userId);
+    console.log(messages, "messages");
+    storeMailsInDB(messages, userId);
+    // if (messages.length > 0) {
+    //   await storeMessages(messages, userId);
+    // }
+  } catch (error) {
+    console.error("Error listing unread messages:", error);
   }
 }
 
-// async function listUnreadMessages(auth, historyId) {
-//     const gmail = google.gmail({ version: "v1", auth });
-//     const res = await gmail.users.history.list({
-//       userId: "me",
-//       startHistoryId: historyId,
-//       historyTypes: ["messageAdded"]
-//     });
-//     const histories = res.data.history;
-
-//     if (histories && histories.length > 0) {
-//       for (const history of histories) {
-//         if (history.messagesAdded) {
-//           for (const message of history.messagesAdded) {
-//             await getMessageAndStore(auth, message.message.id);
-//           }
-//         }
-//       }
-//     } else {
-//       console.log("No new messages found.");
-//     }}
 app.get("/", (req, res) => {
   res.send("GCP is working fine on server");
 });
 
-async function createGmailWatch(auth) {
+async function createGmailWatch(auth, email) {
   try {
     const gmail = google.gmail({ version: "v1", auth });
-    console.log(gmail, "gmail", auth);
+
     const res = await gmail.users.watch({
       userId: "me",
       requestBody: {
-        labelIds: ["INBOX"],
+        labelIds: ["INBOX", "UNREAD"],
         topicName: TOPIC_NAME,
       },
     });
-    console.log(res);
+    console.log("Pubsub Created for ", email);
   } catch (e) {
     console.log("Error in gmail watch", e);
   }
+}
+
+// Function to decode the JWT and extract the payload
+function decodeJwt(token) {
+  const base64Url = token.split(".")[1];
+  const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+  const jsonPayload = Buffer.from(base64, "base64").toString("utf8");
+  return JSON.parse(jsonPayload);
 }
 
 const oauth2Client = new google.auth.OAuth2(
@@ -263,13 +291,6 @@ const oauth2Client = new google.auth.OAuth2(
   "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",
   "http://localhost:3001"
 );
-
-const refreshAccessToken = async (refreshToken) => {
-  oauth2Client.setCredentials({ refresh_token: refreshToken });
-  const { credentials } = await oauth2Client.refreshAccessToken();
-  console.log(credentials, "credentials");
-  return credentials;
-};
 
 // Endpoint to receive Google OAuth tokens
 app.post("/store-tokens", async (req, res) => {
@@ -282,15 +303,6 @@ app.post("/store-tokens", async (req, res) => {
 
     // Extract the tokens
     const { access_token, refresh_token, id_token } = tokens;
-    console.log(
-      access_token,
-      "-=-==-=",
-      refresh_token,
-      "--==--=-=-",
-      id_token,
-      "tokens"
-    );
-
     // Verify the ID token and get user info
     const ticket = await oauth2Client.verifyIdToken({
       idToken: id_token,
@@ -299,14 +311,14 @@ app.post("/store-tokens", async (req, res) => {
     });
 
     const payload = ticket.getPayload();
-    console.log(payload, "payload");
+
     const userId = payload["sub"]; // User ID
     const email = payload["email"]; // User email
 
-    const ref = db.ref(`users/${userId}/tokens`);
+    const ref = db.ref(`users/${userId}`);
     await ref.set({ tokens, email });
 
-    await createGmailWatch(oauth2Client);
+    await createGmailWatch(oauth2Client, email);
 
     // Send tokens to the client or store them in your database
     res.status(200).send({ access_token, refresh_token, id_token });
@@ -314,90 +326,31 @@ app.post("/store-tokens", async (req, res) => {
     console.error("Error exchanging authorization code for tokens:", error);
     res.status(400).send("Error exchanging authorization code for tokens");
   }
-
-  // const { userId, tokens, email } = req.body;
-  // console.log(userId, "-=-=-=-===-=-", tokens);
-
-  // const updated = {
-  //   ...tokens,
-  //   refresh_token:
-  //     "1//03KTNE9u8Q52uCgYIARAAGAMSNwF-L9Ir6ZCwB-Hbckucc-BETG4cIf0W1r5zV5crtjzEx5ArJVA_ShVGVLv9UJKycqH4JgG-CtY",
-  // };
-
-  // Use the tokens to set up Gmail watch
-  // const oauth2Client = new google.auth.OAuth2();
-  // try {
-  //   const oauth2Client = new google.auth.OAuth2(
-  //     "226341879966-a1nf9tfijbfkjqrlmqpdephpjd5ilquh.apps.googleusercontent.com",
-  //     "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"
-  //   );
-  //   oauth2Client.setCredentials(tokens);
-  // } catch (e) {
-  //   console.log(e, "hre eorror");
-  // }
-  // const oauth2Client = new google.auth.OAuth2(
-  //   "226341879966-a1nf9tfijbfkjqrlmqpdephpjd5ilquh.apps.googleusercontent.com",
-  //   "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"
-  // );
-  // const oauth2Client = new google.auth.OAuth2(
-  //   "226341879966-a1nf9tfijbfkjqrlmqpdephpjd5ilquh.apps.googleusercontent.com",
-  //   "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",
-  //   "http://localhost:8080"
-  // );
-  // Set the initial credentials
-  // ====
-  // oauth2Client.setCredentials(updated);
-
-  // Refresh the access token
-  // const newTokens = await refreshAccessToken(tokens.refresh_token);
-  // await ref.update(newTokens); // Update stored tokens with new access token
-
-  // Set the new credentials
-  // oauth2Client.setCredentials(newTokens);
-
-  // oauth2Client.setCredentials(tokens);
-
-  // await createGmailWatch(oauth2Client);
-
-  // res.status(200).send("Tokens stored successfully");
 });
 
-// app.post("/webhook", async (req, res) => {
-//   try {
-//     const pubSubMessage = req.body.message;
-//     const messageData = Buffer.from(pubSubMessage.data, "base64").toString(
-//       "utf-8"
-//     );
-//     const messageJson = JSON.parse(messageData);
+const getCurrentUserTokens = async (emailAddress) => {
+  try {
+    const userRef = db.ref("users");
+    const snapshot = await userRef.once("value");
+    const users = snapshot.val();
+    let userId, tokens;
 
-//     const emailAddress = messageJson.emailAddress;
-//     const historyId = messageJson.historyId;
+    for (const key in users) {
+      if (users[key].email === emailAddress) {
+        userId = key;
+        tokens = users[key].tokens;
+        break;
+      }
+    }
 
-//     console.log(
-//       `Received webhook for email: ${emailAddress}, historyId: ${historyId}`
-//     );
-
-//     // Authorize and fetch the history details
-//     let auth = await authorize();
-
-//     // Get the last stored history ID
-//     const lastHistoryId = (await getHistoryId()) ?? historyId;
-
-//     // Option 1: Log all messages in the inbox
-//     await listMessages(auth, lastHistoryId);
-
-//     // await getHistory(auth, historyId);
-
-//     // Update the history ID in Firebase
-//     await setHistoryId(historyId);
-
-//     res.status(204).send(); // Acknowledge the message
-//   } catch (error) {
-//     console.error("Error handling webhook", error);
-//     res.status(500).send("Error handling webhook");
-//   }
-// });
-
+    if (!tokens) {
+      console.error("No tokens found for email:", emailAddress);
+      // return res.status(400).send('No tokens found');
+    } else {
+      return tokens;
+    }
+  } catch (e) {}
+};
 app.post("/webhook", async (req, res) => {
   try {
     console.log("Webhook received:", req.body); // Log the incoming request
@@ -407,27 +360,24 @@ app.post("/webhook", async (req, res) => {
       "utf-8"
     );
     const messageJson = JSON.parse(messageData);
-
-    const userId = messageJson.userId; // Use userId instead of email
     const historyId = messageJson.historyId;
 
-    console.log(
-      `Received webhook for userId: ${userId}, historyId: ${historyId}`
-    );
+    console.log(`Received webhook for historyId: ${historyId}`, messageJson);
 
-    // Authorize and fetch the unread messages
-    const userTokensSnapshot = await db
-      .ref(`users/${sanitizeKey(userId)}/tokens`)
-      .once("value");
-    const userTokens = userTokensSnapshot.val();
-    const oauth2Client = new google.auth.OAuth2();
+    const userTokens = await getCurrentUserTokens(messageJson.emailAddress);
+
     oauth2Client.setCredentials(userTokens);
+
+    const decodedToken = decodeJwt(userTokens?.id_token);
+    const userId = decodedToken.sub;
+    console.log("userId", userId);
 
     // Get the last stored history ID
     const lastHistoryId = await getHistoryId(userId);
-
-    // Fetch and store new messages since the last history ID
-    await listUnreadMessages(oauth2Client, lastHistoryId, userId);
+    if (lastHistoryId) {
+      // Fetch and store new messages since the last history ID
+      await listUnreadMessages(oauth2Client, lastHistoryId, userId);
+    }
 
     // Update the history ID in Firebase
     await setHistoryId(historyId, userId);
@@ -442,9 +392,4 @@ app.post("/webhook", async (req, res) => {
 // Start the Express server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
-  // (async () => {
-  //   // authorize
-  //   let cred = await loadSavedCredentialsIfExist();
-  //   await connectPubSub(cred);
-  // })();
 });
