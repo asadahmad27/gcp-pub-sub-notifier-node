@@ -139,20 +139,65 @@ async function getMessage(auth, messageId) {
   }
 }
 
-const storeMailsInDB = (mails, userId) => {
+// const storeMailsInDB = (mails, userId) => {
+//   try {
+//     // Store the email data in Firebase using messageId as the key
+//     const ref = db.ref(`users/${userId}/mails`);
+
+//     ref.update(mails, (error) => {
+//       if (error) {
+//         console.log("Data could not be saved.", error);
+//       } else {
+//         console.log("Data saved successfully.");
+//       }
+//     });
+//   } catch (e) {
+//     console.log("error in firebase", e);
+//   }
+// };
+
+// const storeMailsInDB = (mails, userId) => {
+//   try {
+//     // Reference to the user's mails in the database
+//     const ref = db.ref(`users/${userId}/mails`);
+
+//     // Push each mail to the mails key
+//     mails.forEach((mail) => {
+//       ref.push(mail, (error) => {
+//         if (error) {
+//           console.log("Data could not be saved.", error);
+//         } else {
+//           console.log("Data saved successfully.");
+//         }
+//       });
+//     });
+//   } catch (e) {
+//     console.log("Error in firebase", e);
+//   }
+// };
+
+const storeMailsInDB = async (mails, userId) => {
   try {
-    // Store the email data in Firebase using messageId as the key
     const ref = db.ref(`users/${userId}/mails`);
 
-    ref.set(mails, (error) => {
-      if (error) {
-        console.log("Data could not be saved.", error);
-      } else {
-        console.log("Data saved successfully.");
-      }
+    // Retrieve existing mails data
+    ref.once("value", (snapshot) => {
+      const existingMails = snapshot.val() || [];
+
+      // Combine existing mails with new mails
+      const updatedMails = existingMails.concat(mails);
+
+      // Update the mails key with combined data
+      ref.set(updatedMails, (error) => {
+        if (error) {
+          console.log("Data could not be saved.", error);
+        } else {
+          console.log("Data saved successfully.");
+        }
+      });
     });
   } catch (e) {
-    console.log("error in firebase", e);
+    console.log("Error in firebase", e);
   }
 };
 
