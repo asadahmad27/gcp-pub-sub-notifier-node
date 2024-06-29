@@ -1,10 +1,11 @@
-FROM node:10-alpine
+FROM node:19.5.0-alpine
 
 # Copy package.json and package-lock.json
 COPY package*.json ./
 
 # Install dependencies
-RUN npm install
+RUN npm install --verbose
+RUN npm cache clean --force
 
 # Copy the rest of your application
 COPY . .
