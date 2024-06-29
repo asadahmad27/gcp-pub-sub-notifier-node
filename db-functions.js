@@ -1,28 +1,23 @@
 const admin = require("firebase-admin");
 
-// const serviceAccount = require("./firebase-private-keys.json");
-
 const serviceAccount = {
   type: "service_account",
-  project_id: "gcp-pub-sub-notifier",
-  private_key_id: "6464adda503e74c7bdd3dc9d5e1828fc6f386c8f",
-  private_key:
-    "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCLEVv71B+ctyOZ\n+9wCoKr3QxiutkTnF8FglGtZG7cxpazC6sEHCdZk+OO/1YqbOcaOQ/VIRPUPbX1K\nDqDlHBC/9bclDMSPuMb1+hv8AzZxIbPEjP2NnrOIjC/9PktiotMLSuX104Cmh4OQ\ngwb0LUfbrP727qQrqTnE1B8KKi6WXQ0PaZ/LRVYtWl34m/IsRAmoUlLtmkPyATk5\nvBPEY/0FrRjlWpJ5AfPeb93p8zu9aCe0hhYDu3Ma+3lBNxUJY79eHLSZFetPNH0a\njXV7yXcPPIEPQFSGt0u5YcS4CyEYdDHg7Z2mKCTtal7C96cAcP9+PZvF1mmiAOMB\nOD9sgdoHAgMBAAECggEAGl6pTYA0mlfTxWAPoOPsZ0Ruyro/KH7FqVWbYWMzApQC\nxVcUUQxZff3/2aFZTgPPlaxnN1P0D//X8RIDCk6fEnc6Sik4oHQOLhhF9Cx7x0n3\nt35wmckNDAhhFSkZzFNJp2uFXW7Eh09M8DsYN3bamFoeYp5vvOOy05LRa/EBsnsc\n58NHABVqBIUn/wmB7YzISxBIID94CjvbGusVvnqGeYWp0UltBRd6QQpgrwAQb2u4\nF3lZiNO21VJS2PDS1P6z6JOM0UtaUOPFIDabIXjK1xQGRg/wIfrprzFsL+uz1p2Y\nIGbLdF6DSkBZTvET/Gz+DTxUUNOnQBu37pOxklgxGQKBgQDCNCWxqGaBU4BiCQaD\n1glZQWxySursHbEjr3tO3JVWv6l/pcGeW5q3IZK2JD2Vq6m46uIi4Sd/CHBFWI50\n/HWZtA//Q6eeg3GX+z4Znsx7bZwJH18Eqp58fq+ctucaNZGNAf5crhSQiS8eg9U7\neKR33sDK6X7kF3RUm7cA1UxflQKBgQC3UdZCUn1j0YaARKxW2e7Xi7LojkH9oHGC\n7qzyxVEXc1o8jE7ZE5ud4Mxkc/kF+W6trSll+mb4Josd7D/69qE0/DG4DmB8Nn1e\nYESuSJCJV/E8LHtbZcnVt1iel+Vi5rqKYQGsZXG1n+sAUWDcbiwwESb2iRN6LLxj\nqlaUBPOcKwKBgHwA/jylkeZsYiK3LqDJ76g9fTixm7Xu86gcqfjeIsGEmn92YN50\nEaNz3ZFOLMDAHxyDZqfs6uJTihTNihErDxB5CGnvUj2GIudvtuR3IIyDncm5bVu2\ncoJ+BjZkF8cFg43tQvT89wafgiXS+joCO8qKwsIOPEb6rv5De6QdjqnNAoGAR+Hd\nJBB4foWQOgezlDLMhtSOiMYPdkZNfEveoStiCtH+ljNmT5RytsuJGfKnuQH/tjZq\nP0Saz789WbRjuiKvP7mMPWHVz58GNdWF2Nk3Y8OKIlBG5qXZKOZF55okJk3W45/6\nKgF1PwS//1Xpp0XEKezv3EgPzR5xmJsYa94tMBUCgYEAvwWZP6nkhebjoJvZH2I/\nCRcWHvY4m0KAYxvi0TiQac6Yn7kJIOTdd61q3dlEv1yjrWtLuAhbk1lKMvF9/B0f\n7GvG7HjBX0DFCBP19VlStiLEvlS3Eow0TkXvcAplDlW27sfNzsDrYng5QvW3FcQl\neV9g+N5eyzDO2sprkXNP46Q=\n-----END PRIVATE KEY-----\n",
-  client_email:
-    "firebase-adminsdk-s465n@gcp-pub-sub-notifier.iam.gserviceaccount.com",
-  client_id: "109091742434522102518",
+  project_id: "<project-id>",
+  private_key_id: "YOUR_PRIVATE_KEY_ID",
+  private_key: "YOUR_PRIVATE_KEY",
+  client_email: "YOUR_CLIENT_EMAIL",
+  client_id: "YOUR_CLIENT_ID",
   auth_uri: "https://accounts.google.com/o/oauth2/auth",
   token_uri: "https://oauth2.googleapis.com/token",
   auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-  client_x509_cert_url:
-    "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-s465n%40gcp-pub-sub-notifier.iam.gserviceaccount.com",
+  client_x509_cert_url: "YOUR_CLIENT_X509_CERT_URL",
   universe_domain: "googleapis.com",
 };
 
 // Initialize Firebase Admin SDK
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://gcp-pub-sub-notifier-default-rtdb.firebaseio.com/",
+  databaseURL: "https://<db-url>.firebaseio.com/",
 });
 
 const db = admin.database();

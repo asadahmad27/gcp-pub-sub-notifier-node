@@ -27,16 +27,12 @@ app.use(cors(corsOptions));
 // Use body-parser to parse JSON bodies into JS objects
 app.use(bodyParser.json());
 
-// If modifying these scopes, delete token.json.
-const SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"];
-const CREDENTIALS_PATH = path.join(process.cwd(), "credentials.json");
-
-const TOPIC_NAME = "projects/gcp-pub-sub-notifier/topics/gmail-notifiier";
+const TOPIC_NAME = "projects/<project-name>/topics/<topic-name>";
 
 const oauth2Client = new google.auth.OAuth2(
-  "226341879966-a1nf9tfijbfkjqrlmqpdephpjd5ilquh.apps.googleusercontent.com",
-  "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",
-  "http://localhost:3001"
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  process.env.GOOGLE_REDIRECT_URI
 );
 
 // Function to list unread messages for a user
@@ -239,7 +235,7 @@ app.post("/webhook", async (req, res) => {
     const userTokens = await getCurrentUserTokens(messageJson.emailAddress);
 
     oauth2Client.setCredentials(userTokens);
-    console.log(userTokens,"userTokens")
+    console.log(userTokens, "userTokens");
 
     const decodedToken = decodeJwt(userTokens?.id_token);
     const userId = decodedToken.sub;
