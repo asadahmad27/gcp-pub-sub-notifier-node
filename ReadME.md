@@ -27,6 +27,7 @@ Before you begin, ensure you have met the following requirements:
    ```bash
    git clone https://github.com/yourusername/gmail-notifier.git
    cd gmail-notifier
+   git checkout dev
 
    ```
 
