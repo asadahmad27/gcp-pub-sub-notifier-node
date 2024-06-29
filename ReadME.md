@@ -78,6 +78,15 @@ POST
 
 Endpoint to receive notifications from Google Pub/Sub
 
+#### Request Body:
+
+```bash
+  {
+  "message": {
+    "data": "base64-encoded-data"
+  }
+```
+
 ## GCP
 
 ### Install Google Cloud SDK
