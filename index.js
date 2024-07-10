@@ -4,6 +4,8 @@ const path = require("path");
 const process = require("process");
 const { google } = require("googleapis");
 const cors = require("cors");
+let dotenv = require("dotenv").config();
+
 const {
   getHistoryId,
   setHistoryId,
@@ -27,16 +29,13 @@ app.use(cors(corsOptions));
 // Use body-parser to parse JSON bodies into JS objects
 app.use(bodyParser.json());
 
-// If modifying these scopes, delete token.json.
-const SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"];
-const CREDENTIALS_PATH = path.join(process.cwd(), "credentials.json");
-
-const TOPIC_NAME = "projects/gcp-pub-sub-notifier/topics/gmail-notifiier";
+// const TOPIC_NAME = "projects/gcp-pub-sub-notifier/topics/gmail-notifiier";
+const TOPIC_NAME = process.env.TOPIC_NAME;
 
 const oauth2Client = new google.auth.OAuth2(
-  "226341879966-a1nf9tfijbfkjqrlmqpdephpjd5ilquh.apps.googleusercontent.com",
-  "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",
-  "http://localhost:3001"
+  process.env.CLIENT_ID, //client id
+  process.env.CLIENT_SECRET, //client secret
+  process.env.REDIRECT_URI //redirect uri
 );
 
 // Function to list unread messages for a user
@@ -201,8 +200,7 @@ app.post("/store-tokens", async (req, res) => {
     // Verify the ID token and get user info
     const ticket = await oauth2Client.verifyIdToken({
       idToken: id_token,
-      audience:
-        "226341879966-a1nf9tfijbfkjqrlmqpdephpjd5ilquh.apps.googleusercontent.com",
+      audience: process.env.AUDIENCE,
     });
 
     const payload = ticket.getPayload();
@@ -239,7 +237,7 @@ app.post("/webhook", async (req, res) => {
     const userTokens = await getCurrentUserTokens(messageJson.emailAddress);
 
     oauth2Client.setCredentials(userTokens);
-    console.log(userTokens,"userTokens")
+    console.log(userTokens, "userTokens");
 
     const decodedToken = decodeJwt(userTokens?.id_token);
     const userId = decodedToken.sub;

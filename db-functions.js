@@ -22,7 +22,7 @@ const serviceAccount = {
 // Initialize Firebase Admin SDK
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://gcp-pub-sub-notifier-default-rtdb.firebaseio.com/",
+  databaseURL: process.env.DATABASE_URL,
 });
 
 const db = admin.database();
